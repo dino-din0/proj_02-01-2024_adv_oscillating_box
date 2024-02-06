@@ -1,3 +1,4 @@
+
 #-------------------------------------------------------
 """
 
@@ -37,9 +38,7 @@ def main():
     
     
         solve_system    = Solve_Differential_System()
-        
-    
-          
+                 
         # object utilization
         solve_system.solve_sys( diff_sys )
           
@@ -50,7 +49,7 @@ def main():
         
         my_plot.chart_it( solve_system.data )
         
-        coordinates     = Define_Points ( solve_system.comp_sol ) 
+        coordinates     = Define_Points ( diff_sys.number_of_moving_bodies, solve_system.comp_sol ) 
         coordinates.point_coordinates()
         
         action = Perform_Animation( diff_sys.delta_t, coordinates ) 
@@ -153,7 +152,7 @@ class Define_Differential_System( object ):
         
         self.t_stations = int( ( self.t_end - self.t_begin ) / self.delta_t )
         
-        t_temp = self.delta_t * float( self.t_stations )        
+        t_temp = self.delta_t * float( self.t_stations ) + self.t_begin      
         if ( t_temp < self.t_end ):
             self.t_end = t_temp + self.delta_t
         else :
@@ -196,21 +195,27 @@ class My_Differential_System( Define_Differential_System ):
     #--------------------------------------- 
     def number_of_equations_and_parameters_2( self ):
         
-        self.numb_of_eq      = 4 # Changed to 4 equations based on the derivatations performed on 02/01/2024; be sure to add new system parameters
-        self.numb_of_par     = 7  # Changed to 6 parameters
+        self.numb_of_eq      = 4
+        self.numb_of_par     = 7
+        self.number_of_moving_bodies = 2 
         #-------------------------------------------
         # System parameters
         
                
         k = 0.5
         
-        xi = -0.25
+        xi = 3.2
         
-        k_2_k_1 = 30.0 # Added this system parameter to represent the K Ratio
         
-        m_2_m_1 = 0.4 # Added this system parameter Mass Ratio 
+        k_2_k_1 = 13.0 # A higher number = a more stiff spring
         
-        ell_0 = 1.5 # Initial Length ; is a parameter #4, present in Eq. 1 and 3
+        m_2_m_1 = 0.4
+        
+        c_2_c_1 = 1.0 # New ratio was added, for HW4, it is the damping coefficient ratio. If it was set to 0, it would be similar to just removing the damper
+        
+        
+        ell_0 = 1.5
+        
         
         fs_mag =  0.0
         
@@ -225,34 +230,41 @@ class My_Differential_System( Define_Differential_System ):
 
         self.par = numpy.zeros( ( self.numb_of_eq, self.numb_of_par ), dtype = float ) 
 
-        self.par[ 1 ][ 0 ] = k * (1.0 + k_2_k_1) # Added (1.0 + k_2_k_1) on 02/01/2024
-        self.par[ 1 ][ 1 ] = 2.0 * xi * math.sqrt( k )
-        self.par[ 1 ][ 2 ] = k * k_2_k_1 # Added this line on 02/01/2024
+        self.par[ 1 ][ 0 ] = k * ( 1.0 + k_2_k_1 )
+        self.par[ 1 ][ 1 ] = 2.0 * xi * math.sqrt( k ) * ( 1.0 + c_2_c_1 ) ## The last part takes into account the potential for adding in a damper
+        self.par[ 1 ][ 2 ] = k * k_2_k_1
+        self.par[ 1 ][ 3 ] = 2.0 * xi * math.sqrt( k ) * c_2_c_1 
         
         self.par[ 1 ][ 4 ] = ell_0
+        
         
         self.par[ 1 ][ 5 ] = fs_mag 
         self.par[ 1 ][ 6 ] = omega
         
-        self.par[ 3 ][ 0 ] = k * k_2_k_1 / m_2_m_1 # Added this line on 02/01/2024
-        self.par[ 3 ][ 2 ] = k * k_2_k_1 / m_2_m_1 # Added this line on 02/01/2024
+        self.par[ 3 ][ 0 ] = k * k_2_k_1 / m_2_m_1
+        self.par[ 3 ][ 1 ] = 2.0 * xi * math.sqrt( k ) * c_2_c_1 / m_2_m_1
+        self.par[ 3 ][ 2 ] = k * k_2_k_1 / m_2_m_1  
+        self.par[ 3 ][ 3 ] = 2.0 * xi * math.sqrt( k ) * c_2_c_1 / m_2_m_1
         
-        self.par[ 3 ][ 4 ] = ell_0
+        self.par[ 3 ][ 4 ] = ell_0        
+        
+
         return
     #---------------------------------------
-    def init_cond_form_2( self ): # Initial Conditions
+    def init_cond_form_2( self ):
     
         self.q_in      =  numpy.zeros(  self.numb_of_eq, dtype = float )
                
         self.q_in[ 0 ] = 1.0
         self.q_in[ 1 ] = 0.0
-        self.q_in[ 2 ] = 1.0 # Added these two lines to account for there being 4 equations
-        self.q_in[ 3 ] = 0.0            
+        self.q_in[ 2 ] = 2.0
+        self.q_in[ 3 ] = 0.0
+            
         return
 
     #---------------------------------------
     def ode_sys( self, t, q ):  # implement the differential equations in this function
-                                # parameters may be specified through the self.par[] array
+                                # parameters may be specified through the self.par[][] array
         
         #-----------------------------------------------------
         
@@ -263,12 +275,12 @@ class My_Differential_System( Define_Differential_System ):
        
         dq_dt[ 0 ] = q[ 1 ]
         
-        dq_dt[ 1 ] = - par[ 1 ][ 0 ] * q[ 0 ]  - par[ 1 ][ 1 ] * q[ 1 ] + par[ 1 ][ 2 ] * ( q[ 2 ] - par[ 1 ][ 4 ] ) + par[ 1 ][ 5 ] * math.sin( par[ 1 ][ 6 ]  * t )
-                
-        # Pasted this in on 02/06/2024 to account for adding in 2 parameters
+        dq_dt[ 1 ] = - par[ 1 ][ 0 ] * q[ 0 ] - par[ 1 ][ 1 ] * q[ 1 ] + par[ 1 ][ 2 ] * ( q[ 2 ] - par[ 1 ][ 4 ] ) + par[ 1 ][ 3 ] * q[ 3 ] + par[ 1 ][ 5 ] * math.sin( par[ 1 ][ 6 ] * t )
+
         dq_dt[ 2 ] = q[ 3 ]
         
-        dq_dt[ 3 ] = + par[ 3 ][ 0 ] * q[ 0 ]                           - par[ 3 ][ 2 ] * ( q[ 2 ] - par[ 1 ][ 4 ] ) 
+        dq_dt[ 3 ] =   par[ 3 ][ 0 ] * q[ 0 ] + par[ 3 ][ 1 ] * q[ 1 ] - par[ 3 ][ 2 ] * ( q[ 2 ] - par[ 3 ][ 4 ] ) - par[ 3 ][ 3 ] * q[ 3 ]
+                
         #-----------------------------------------------------
         
         print('-> ', end = '')
@@ -277,39 +289,42 @@ class My_Differential_System( Define_Differential_System ):
 
     #---------------------------------------
     def jacob( self, t, q ): # implement the differential-equation jacobian in this function 
-                             # parameters may be specified through the self.par[] array
+                             # parameters may be specified through the self.par[][] array
         #-----------------------------------------------------
                              
         jac_mtrx = numpy.zeros( ( self.numb_of_eq, self.numb_of_eq ), dtype = float )
         par = self.par
 
         #-----------------------------------------------------
-      
+
         #dq_dt[ 0 ] = q[ 1 ]
         
         jac_mtrx[ 0 ][ 0 ] = 0.0
-
         jac_mtrx[ 0 ][ 1 ] = 1.0   
-        jac_mtrx[ 0 ][ 2 ] = 0.0 # Added these two lines to account for there being 4 equations
-        jac_mtrx[ 0 ][ 3 ] = 0.0
-        
-        #dq_dt[ 1 ] = - par[ 1 ][ 0 ] * q[ 0 ]  - par[ 1 ][ 1 ] * q[ 1 ] 
+        jac_mtrx[ 0 ][ 2 ] = 0.0
+        jac_mtrx[ 0 ][ 3 ] = 0.0   
+
+        #dq_dt[ 1 ] = - par[ 1 ][ 0 ] * q[ 0 ] - par[ 1 ][ 1 ] * q[ 1 ] + par[ 1 ][ 2 ] * ( q[ 2 ] - par[ 1 ][ 4 ] ) + par[ 1 ][ 3 ] * q[ 3 ] + par[ 1 ][ 5 ] * math.sin( par[ 1 ][ 6 ] * t )
         
         jac_mtrx[ 1 ][ 0 ] =  - par[ 1 ][ 0 ] 
         jac_mtrx[ 1 ][ 1 ] =  - par[ 1 ][ 1 ]
-        jac_mtrx[ 1 ][ 2 ] =   # Added these two lines and added this block 2 more times ... see the updated code 
-        jac_mtrx[ 1 ][ 3 ] =  
+        jac_mtrx[ 1 ][ 2 ] =    par[ 1 ][ 2 ]
+        jac_mtrx[ 1 ][ 3 ] =    par[ 1 ][ 3 ]   
+       
+        #dq_dt[ 2 ] = q[ 3 ]
         
-        jac_mtrx[ 2 ][ 0 ] =  
-        jac_mtrx[ 2 ][ 1 ] =  
-        jac_mtrx[ 2 ][ 2 ] =  
-        jac_mtrx[ 2 ][ 3 ] =  
+        jac_mtrx[ 2 ][ 0 ] = 0.0
+        jac_mtrx[ 2 ][ 1 ] = 0.0   
+        jac_mtrx[ 2 ][ 2 ] = 0.0
+        jac_mtrx[ 2 ][ 3 ] = 1.0   
+
+        #dq_dt[ 3 ] =   par[ 3 ][ 0 ] * q[ 0 ] + par[ 3 ][ 1 ] * q[ 1 ] - par[ 3 ][ 2 ] * ( q[ 2 ] - par[ 3 ][ 4 ] ) - par[ 3 ][ 3 ] * q[ 3 ]
         
-        jac_mtrx[ 3 ][ 0 ] =  
-        jac_mtrx[ 3 ][ 1 ] =  
-        jac_mtrx[ 3 ][ 2 ] =  
-        jac_mtrx[ 3 ][ 3 ] =  
-        
+        jac_mtrx[ 3 ][ 0 ] =    par[ 3 ][ 0 ] 
+        jac_mtrx[ 3 ][ 1 ] =    par[ 3 ][ 1 ]
+        jac_mtrx[ 3 ][ 2 ] =  - par[ 3 ][ 2 ]
+        jac_mtrx[ 3 ][ 3 ] =  - par[ 3 ][ 3 ]
+
         #-----------------------------------------------------
         
         return( jac_mtrx )
@@ -334,7 +349,7 @@ class Solve_Differential_System( object ):
         q_in = diff_sys.init_cond()
  
         print('...working...')
-        self.comp_sol = solve_ivp( diff_sys.ode_sys, time_range, q_in, method = 'Radau', t_eval = time, dense_output = True, atol = 1.0e-13, rtol = 1.0e-13, jac = diff_sys.jacob )
+        self.comp_sol = solve_ivp( diff_sys.ode_sys, time_range, q_in, method = 'Radau', t_eval = time, dense_output = True, atol = 1.0e-9, rtol = 1.0e-9, jac = diff_sys.jacob )
         
         self.data_matrix()
        
@@ -528,9 +543,9 @@ class Plot( object ):
 class Define_Points:
     
     #---------------------------------------
-    def __init__( self, sol ):
+    def __init__( self, number_of_moving_bodies, sol ):
                 
-        self.number_of_moving_points  = 1
+        self.number_of_moving_points  = number_of_moving_bodies
                
         self.sol = sol
         
@@ -550,12 +565,14 @@ class Define_Points:
         y = self.y
            
         #--------------------------------------- 
+        
+        for j in range( self.number_of_moving_points ):
                  
-        for i in range( self.number_of_rows ):
-            #coordinates of moving points
+            for i in range( self.number_of_rows ):
+                #coordinates of moving points
             
-            x[ 1 ][ i ] = self.sol.y[ 0 ][ i ]
-            y[ 1 ][ i ] = 0.0
+                x[ j + 1 ][ i ] = self.sol.y[ 2*j ][ i ]
+                y[ j + 1 ][ i ] = 0.0
             
         #--------------------------------------- 
         
@@ -575,7 +592,15 @@ class Perform_Animation:
 
         self.plt = plt
         
+        self.number_of_moving_points = coord.number_of_moving_points
+        
         self.number_of_rows = coord.number_of_rows
+        
+        self.line = []
+
+        for k in range( 2 * self.number_of_moving_points ):
+            
+            self.line.append( [] )
         
         self.interval    = 0.01
         #self.history_len = int( self.number_of_rows / 5 ) # how many trajectory points to keep
@@ -602,9 +627,16 @@ class Perform_Animation:
 
         ax.grid( True )
         
-        self.line_1,  = ax.plot( [], [], ls = "-", linewidth = 0, color = 'g', marker = 's', ms = 40, mec = 'b', mfc = 'b' )
+       
+        for k in range( self.number_of_moving_points ):           
+            self.line[ k ], = ax.plot( [], [], ls = "-", linewidth = 0, color = 'g', marker = 's', ms = 20, mec = 'b', mfc = 'b' )
+            
 
-        self.time_template = 'time = %.1fs' 
+        for k in range( self.number_of_moving_points ):           
+            self.line[ k + self.number_of_moving_points ], = ax.plot( [], [], ls = "--", linewidth = 4, color = 'k', marker = '8', ms = 8, mec = 'g', mfc = 'g' )
+            
+
+        self.time_template = 'time = %.2f' 
         self.time_text = ax.text( self.t_a, self.t_b, '', transform = ax.transAxes )
         
         self.ax = ax 
@@ -612,8 +644,10 @@ class Perform_Animation:
         #self.ax.set_xlim( [ min( self.x[ 1 ] ), max( self.x[ 1 ] ) ] )  
         #self.ax.set_ylim( [ min( self.y[ 1 ] ), max( self.y[ 1 ] ) ] )      
               
-        #self.ax.plot( [ 0.0 ], [0.0], ls = "-", linewidth = 1, color = 'y', marker = 'o', ms = 20, mec = 'r', mfc = 'y' )
-        self.ax.plot( self.x[ 1 ], self.y[ 1 ], ls = "-", linewidth = 1, color = 'r', marker = ',', ms = 0, mec = 'r', mfc = 'r' )
+        #self.ax.plot( [ 0.0 ], [ 0.0 ], ls = "-", linewidth = 1, color = 'y', marker = 'o', ms = 20, mec = 'r', mfc = 'y' )
+        
+        for j in range( self.number_of_moving_points ):
+            self.ax.plot( self.x[ j + 1 ], self.y[ j + 1 ], ls = "-", linewidth = 1, color = 'r', marker = ',', ms = 0, mec = 'r', mfc = 'r' )
 
         self.animate()
  
@@ -637,17 +671,24 @@ class Perform_Animation:
         if ( i > self.number_of_rows ):
             i = self.number_of_rows - 1
 
-        line_point_x_1 = [ self.x[ 1 ][ i ] ]
-        line_point_y_1 = [ self.y[ 1 ][ i ] ]
+        var = []    
         
-        self.line_1.set_data( line_point_x_1, line_point_y_1 )
-              
+
+        for k in range( self.number_of_moving_points ):
+            self.line[ k ].set_data( [ self.x[ k + 1 ][ i ] ], [ self.y[ k + 1 ][ i ] ] )
+            var.append( self.line[ k ] )
+
+
+        self.line[ self.number_of_moving_points ].set_data( [ -0.5, self.x[ 1 ][ i ] ], [ self.y[ 1 ][ i ], self.y[ 1 ][ i ] ] )       
+        var.append(  self.line[ self.number_of_moving_points ] )
+
+
+        for k in range( 1, self.number_of_moving_points ):
+            self.line[ self.number_of_moving_points + k ].set_data( [ self.x[ k ][ i ], self.x[ k + 1 ][ i ] ], [ self.y[ k ][ i ], self.y[ k + 1 ][ i ] ] )
+            var.append( self.line[ self.number_of_moving_points + k ] )
+            
+        
         self.time_text.set_text( self.time_template % ( i * self.dt ) )
-    
-        
-        var = []
-        
-        var.append( self.line_1 )
         
         var.append( self.time_text )
         
@@ -930,6 +971,9 @@ class Eigenvalue_Sets:
 #-------------------------------------------------------
 main()
 #-------------------------------------------------------
+
+
+
 
 
 
